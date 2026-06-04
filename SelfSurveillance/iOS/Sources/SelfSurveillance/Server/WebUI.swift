@@ -13,7 +13,8 @@ enum WebUI {
 <style>
 :root {
   --bg:#0D1117; --surface:#161B22; --surface2:#1C2128; --primary:#64FFDA;
-  --text:#E6EDF3; --muted:#8B949E; --border:#30363D; --error:#FF5370; --r:8px;
+  --text:#E6EDF3; --muted:#8B949E; --border:#30363D; --error:#FF5370;
+  --warn:#FFD54F; --r:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -36,6 +37,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
 /* ── Card ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+/* ── Section header inside card ── */
+.sec{padding:9px 14px;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.6px;
+  border-bottom:1px solid var(--border);text-transform:uppercase}
 /* ── Chips ── */
 .chips{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;flex-shrink:0}
 .chip{flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:12px;cursor:pointer;
@@ -46,6 +50,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .btn-p{background:var(--primary);color:#003828}
 .btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
 .btn-r{background:#FF5370;color:#fff}
+.btn-w{background:#FFD54F22;color:var(--warn);border:1px solid var(--warn)}
 /* ── Rows ── */
 .row{padding:10px 12px;cursor:pointer}
 .row:hover{background:var(--surface2)}
@@ -81,6 +86,34 @@ pre{background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;
 /* ── Progress bar ── */
 .bar-bg{background:var(--border);border-radius:2px;height:4px;margin-top:5px}
 .bar{height:4px;border-radius:2px}
+/* ── Toggle switch ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-row span{font-size:14px}
+.sw{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sl{position:absolute;inset:0;background:var(--border);border-radius:13px;cursor:pointer;transition:.2s}
+.sl:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;
+  background:#fff;border-radius:50%;transition:.2s}
+input:checked+.sl{background:var(--primary)}
+input:checked+.sl:before{transform:translateX(18px)}
+input:disabled+.sl{opacity:.4;cursor:default}
+/* ── Range slider ── */
+.range-row{padding:6px 14px 10px}
+.range-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+input[type=range]{width:100%;accent-color:var(--primary)}
+/* ── Status pill ── */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;
+  font-size:11px;font-weight:600}
+.pill-g{background:#64FFDA18;color:var(--primary)}
+.pill-r{background:#FF537018;color:var(--error)}
+/* ── Full-width btn ── */
+.full{width:100%;text-align:left;padding:11px 14px;border-radius:0;border:none;
+  background:none;color:var(--text);cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)}
+.full:last-child{border-bottom:none}
+.full:hover{background:var(--surface2)}
+.full:disabled{color:var(--muted);cursor:default}
 </style>
 </head>
 <body>
@@ -113,9 +146,12 @@ pre{background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;
 <!-- ═══ LOGS ══════════════════════════════════════════════════════════════════ -->
 <div id="s-logs" class="screen">
   <div class="hdr"><h1>Logs</h1></div>
-  <div style="padding:8px 12px"><input class="srch" type="search" placeholder="Search…" oninput="debSearch(this.value)"></div>
+  <div style="padding:8px 12px">
+    <input class="srch" type="search" placeholder="Search…" oninput="debSearch(this.value)">
+  </div>
   <div class="chips" id="logchips"></div>
-  <div class="card" style="flex:1;overflow-y:auto;border-radius:0;border-left:none;border-right:none" id="logscroll" onscroll="onLogScroll()">
+  <div class="card" style="flex:1;overflow-y:auto;border-radius:0;border-left:none;border-right:none"
+       id="logscroll" onscroll="onLogScroll()">
     <div id="loglist"></div>
     <div id="logspinner" style="display:none"><div class="spin"></div></div>
   </div>
@@ -126,7 +162,7 @@ pre{background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;
   <div class="hdr">
     <h1>Screen Mirror</h1>
     <span id="fpslabel" style="font-size:12px;color:var(--muted);font-family:monospace"></span>
-    <button class="btn btn-g" id="connbtn" style="font-size:12px;padding:5px 10px" onclick="toggleScreen()">Connect</button>
+    <button class="btn btn-g" id="connbtn" style="font-size:12px;padding:5px 10px" onclick="toggleScreenWS()">Connect</button>
   </div>
   <div id="sv">
     <div id="sph" style="text-align:center;color:var(--muted)">
@@ -145,6 +181,72 @@ pre{background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;
     <button class="btn btn-r" id="recbtn" onclick="toggleRec()" style="display:none">⏺ Record</button>
     <div id="recpath" style="font-size:10px;color:var(--muted);text-align:right;max-width:140px"></div>
   </div>
+</div>
+
+<!-- ═══ CONTROLS ══════════════════════════════════════════════════════════════ -->
+<div id="s-ctrl" class="screen">
+  <div class="hdr">
+    <h1>Controls</h1>
+    <button class="btn btn-g" style="font-size:12px;padding:5px 10px" onclick="loadStatus()">↻</button>
+  </div>
+  <div class="body">
+
+    <!-- Collectors -->
+    <div class="card">
+      <div class="sec">Collectors</div>
+      <div id="coll-list">
+        <div style="padding:20px;text-align:center"><div class="spin"></div></div>
+      </div>
+    </div>
+
+    <!-- Screen capture -->
+    <div class="card">
+      <div class="sec">Screen Capture</div>
+      <div class="toggle-row">
+        <span>Streaming</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="scr-pill" class="pill pill-r">Off</span>
+          <label class="sw">
+            <input type="checkbox" id="scr-sw" onchange="toggleCapture(this)">
+            <span class="sl"></span>
+          </label>
+        </div>
+      </div>
+      <div class="range-row" style="margin-top:4px">
+        <div class="range-label"><span>FPS</span><span id="fps-val">10</span></div>
+        <input type="range" id="fps-sl" min="1" max="30" value="10"
+               oninput="document.getElementById('fps-val').textContent=this.value">
+      </div>
+      <div class="range-row">
+        <div class="range-label"><span>JPEG Quality</span><span id="q-val">50%</span></div>
+        <input type="range" id="q-sl" min="10" max="100" value="50"
+               oninput="document.getElementById('q-val').textContent=this.value+'%'">
+      </div>
+      <div style="padding:8px 14px 14px">
+        <button class="btn btn-p" style="width:100%" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+
+    <!-- Data -->
+    <div class="card">
+      <div class="sec">Data</div>
+      <button class="full" onclick="exportLogs()">⬇&nbsp; Export All Logs (.ndjson)</button>
+      <button class="full" id="integ-btn" onclick="checkIntegrity()">✓&nbsp; Verify Data Integrity</button>
+      <div id="integ-result" style="padding:0 14px 12px;font-size:12px;display:none"></div>
+    </div>
+
+    <!-- Sync engine -->
+    <div class="card">
+      <div class="sec">Sync Engine</div>
+      <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:var(--muted)">Backend server URL (optional cloud sync)</div>
+        <input class="srch" id="sync-url" type="url" placeholder="http://192.168.1.x:3000"
+               style="font-family:monospace;font-size:13px">
+        <button class="btn btn-g" style="align-self:flex-start" onclick="saveSyncURL()">Save URL</button>
+      </div>
+    </div>
+
+  </div><!-- /.body -->
 </div>
 
 <!-- ═══ TAB BAR ═══════════════════════════════════════════════════════════════ -->
@@ -173,6 +275,13 @@ pre{background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;
       <line x1="12" y1="18" x2="12.01" y2="18"/>
     </svg>Screen
   </button>
+  <button class="t" onclick="go('ctrl',this)">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/>
+    </svg>Controls
+  </button>
 </nav>
 
 <!-- ═══ DETAIL MODAL ══════════════════════════════════════════════════════════ -->
@@ -190,6 +299,12 @@ const COLORS = {
   photo_library:'#CE93D8',files:'#B0BEC5',notes:'#FFE082',
   keychain:'#EF9A9A',calendar:'#80DEEA'
 };
+const COLL_LABELS = {
+  app_usage:'App Usage', notifications:'Notifications', clipboard:'Clipboard',
+  photo_library:'Photo Library', contacts:'Contacts', calendar:'Calendar',
+  location:'Location', health:'Health', network:'Network & WiFi',
+  files:'Files & Notes', system_events:'System Events'
+};
 const SRCS = Object.keys(COLORS);
 
 function col(src){ return COLORS[src]||'#90A4AE'; }
@@ -203,31 +318,30 @@ function go(name, btn){
   btn.classList.add('on');
   if(name==='live' && !lws) connectLive();
   if(name==='dash') loadSummary();
+  if(name==='ctrl') loadStatus();
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 let selDev = null;
 
 async function loadSummary(){
-  // Show WiFi address in header
   const ip = await fetch('/ip').then(r=>r.text()).catch(()=>'');
-  if(ip) document.getElementById('wifi-url').textContent = 'http://'+ip;
+  if(ip) document.getElementById('wifi-url').textContent='http://'+ip;
 
-  const url = '/api/logs/summary'+(selDev?'?deviceID='+selDev:'');
-  const s = await fetch(url).then(r=>r.json()).catch(()=>null);
+  const url='/api/logs/summary'+(selDev?'?deviceID='+selDev:'');
+  const s=await fetch(url).then(r=>r.json()).catch(()=>null);
   if(!s) return;
 
-  // Device chips
-  const dc = document.getElementById('device-chips');
+  const dc=document.getElementById('device-chips');
   if(s.devices && s.devices.length>1){
-    dc.innerHTML = [null,...s.devices].map(d=>`
+    dc.innerHTML=[null,...s.devices].map(d=>`
       <span class="chip${(d===null&&!selDev)||(d&&d.deviceID===selDev)?' on':''}"
             onclick="selDevice('${d?d.deviceID:''}')">
         ${d?d.deviceName:'All'}
       </span>`).join('');
   } else { dc.innerHTML=''; }
 
-  const body = document.getElementById('dash-body');
+  const body=document.getElementById('dash-body');
   body.innerHTML='';
 
   body.insertAdjacentHTML('beforeend',`
@@ -238,13 +352,14 @@ async function loadSummary(){
         ${s.oldestTimestamp.slice(0,10)} → ${(s.newestTimestamp||'').slice(0,10)}</div>`:''}
     </div>`);
 
-  const total = s.totalEntries||1;
-  const sorted = Object.entries(s.bySource||{}).sort((a,b)=>b[1]-a[1]);
+  const total=s.totalEntries||1;
+  const sorted=Object.entries(s.bySource||{}).sort((a,b)=>b[1]-a[1]);
   for(const [src,cnt] of sorted){
-    const pct = Math.round(cnt/total*100);
-    const c = col(src);
+    const pct=Math.round(cnt/total*100);
+    const c=col(src);
     body.insertAdjacentHTML('beforeend',`
-      <div class="card" style="padding:10px 14px">
+      <div class="card" style="padding:10px 14px;cursor:pointer"
+           onclick="filterLogs('${src}')">
         <div style="display:flex;justify-content:space-between">
           <span style="font-size:13px">${fmt(src)}</span>
           <span style="font-weight:600;color:${c}">${cnt.toLocaleString()}</span>
@@ -255,6 +370,15 @@ async function loadSummary(){
 }
 
 function selDevice(id){ selDev=id||null; loadSummary(); }
+
+function filterLogs(src){
+  logFilt=src; buildLogChips(); resetLogs();
+  // switch to logs tab
+  document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('.t').forEach(b=>b.classList.remove('on'));
+  document.getElementById('s-logs').classList.add('on');
+  document.querySelectorAll('.t')[2].classList.add('on');
+}
 
 // ─── Live Feed ────────────────────────────────────────────────────────────────
 let lws=null, paused=false, lfilt=null;
@@ -294,6 +418,7 @@ function connectLive(){
           ${(entry.timestamp||'').slice(11,19)}
         </div>
       </div>`;
+    div.onclick=()=>openModal(entry);
     list.prepend(div);
     while(list.children.length>300) list.lastChild.remove();
   };
@@ -303,7 +428,7 @@ function togglePause(){ paused=!paused; document.getElementById('pbtn').textCont
 function clearLive(){ document.getElementById('llist').innerHTML=''; }
 
 // ─── Log Browser ─────────────────────────────────────────────────────────────
-let logOff=0, logLoading=false, logMore=true, logFilt=null, logQ='', debTimer=null;
+let logOff=0,logLoading=false,logMore=true,logFilt=null,logQ='',debTimer=null;
 
 function buildLogChips(){
   const el=document.getElementById('logchips');
@@ -356,7 +481,7 @@ function openModal(e){
   document.getElementById('modal').innerHTML=`
     <div style="font-size:16px;font-weight:600;margin-bottom:8px">${e.eventType}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
-      ${fmt(e.source)} · ${e.category}<br>
+      ${fmt(e.source)} · ${e.category||''}<br>
       ${(e.timestamp||'').replace('T',' ').slice(0,19)} · #${e.sequenceNumber}<br>
       ${e.deviceName||''} (iOS ${e.iOSVersion||''})
       ${e.appBundleID?'<br>'+e.appBundleID:''}
@@ -370,12 +495,12 @@ function closeModal(){ document.getElementById('overlay').classList.remove('on')
 // ─── Screen Mirror ────────────────────────────────────────────────────────────
 let sws=null, fc=0, fpsF=0, fpsT=Date.now(), mr=null, rc=[];
 
-function toggleScreen(){
+function toggleScreenWS(){
   if(sws){ sws.close(); sws=null; return; }
-  connectScreen();
+  connectScreenWS();
 }
 
-function connectScreen(){
+function connectScreenWS(){
   const canvas=document.getElementById('sc');
   const ctx=canvas.getContext('2d');
   const ws=new WebSocket(`ws://${location.host}/screen`);
@@ -393,6 +518,7 @@ function connectScreen(){
     canvas.style.display='none';
     document.getElementById('sph').style.display='block';
     if(mr && mr.state!=='inactive') mr.stop();
+    sws=null;
   };
   ws.onmessage=e=>{
     const blob=new Blob([e.data],{type:'image/jpeg'});
@@ -443,6 +569,127 @@ function startRec(){
   mr.start(1000);
   document.getElementById('recbtn').textContent='■ Stop';
   document.getElementById('recbadge').classList.add('on');
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+let statusCache = {};
+
+async function loadStatus(){
+  let s;
+  try { s = await fetch('/api/status').then(r=>r.json()); }
+  catch(_){ return; }
+  statusCache = s;
+
+  // Render collector toggles
+  const states = s.collectors || {};
+  document.getElementById('coll-list').innerHTML =
+    Object.entries(COLL_LABELS).map(([key,label])=>`
+      <div class="toggle-row">
+        <span>${label}</span>
+        <label class="sw">
+          <input type="checkbox" data-coll="${key}" ${states[key]?'checked':''}
+                 onchange="toggleColl(this)">
+          <span class="sl"></span>
+        </label>
+      </div>`).join('');
+
+  // Screen capture
+  const streaming = s.screenStreaming || false;
+  const sw = document.getElementById('scr-sw');
+  sw.checked = streaming;
+  const pill = document.getElementById('scr-pill');
+  pill.textContent = streaming ? 'Live' : 'Off';
+  pill.className = 'pill ' + (streaming ? 'pill-g' : 'pill-r');
+
+  // Settings sliders
+  const cfg = s.settings || {};
+  const fps = cfg.fps || 10;
+  const q   = Math.round((cfg.quality || 0.5) * 100);
+  document.getElementById('fps-sl').value = fps;
+  document.getElementById('fps-val').textContent = fps;
+  document.getElementById('q-sl').value = q;
+  document.getElementById('q-val').textContent = q + '%';
+}
+
+async function toggleColl(input){
+  const name = input.dataset.coll;
+  const on   = input.checked;
+  try {
+    await fetch('/api/collector', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, on})
+    });
+  } catch(_){ input.checked = !on; } // revert on network error
+}
+
+async function toggleCapture(input){
+  const streaming = input.checked;
+  const pill = document.getElementById('scr-pill');
+  try {
+    await fetch('/api/screen', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({streaming})
+    });
+    pill.textContent = streaming ? 'Live' : 'Off';
+    pill.className = 'pill ' + (streaming ? 'pill-g' : 'pill-r');
+  } catch(_){ input.checked = !streaming; }
+}
+
+async function saveSettings(){
+  const fps     = parseFloat(document.getElementById('fps-sl').value);
+  const quality = parseFloat(document.getElementById('q-sl').value) / 100;
+  try {
+    await fetch('/api/settings', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({fps, quality})
+    });
+  } catch(_){}
+}
+
+function exportLogs(){
+  const a = document.createElement('a');
+  a.href = '/api/export';
+  a.click();
+}
+
+async function checkIntegrity(){
+  const btn = document.getElementById('integ-btn');
+  const res = document.getElementById('integ-result');
+  btn.disabled = true;
+  btn.textContent = '… Checking';
+  res.style.display = 'none';
+  try {
+    const r = await fetch('/api/integrity').then(x=>x.json());
+    res.style.display = 'block';
+    if(!r.issues || r.issues.length===0){
+      res.style.color = 'var(--primary)';
+      res.textContent = `✓ Chain intact — ${r.checked} log file(s) verified`;
+    } else {
+      res.style.color = 'var(--error)';
+      res.textContent = `⚠ ${r.issues.length} integrity issue(s) in ${r.checked} file(s)`;
+    }
+  } catch(_){
+    res.style.display = 'block';
+    res.style.color = 'var(--error)';
+    res.textContent = 'Could not reach device';
+  }
+  btn.disabled = false;
+  btn.textContent = '✓  Verify Data Integrity';
+}
+
+async function saveSyncURL(){
+  const url = document.getElementById('sync-url').value.trim();
+  if(!url) return;
+  try {
+    await fetch('/api/settings', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({syncURL: url})
+    });
+  } catch(_){}
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

@@ -205,6 +205,60 @@ public final class ImmutableLogStore {
         return issues
     }
 
+    // MARK: - Export / Integrity (used by EmbeddedServer HTTP routes)
+
+    public func exportAllLogs() -> Data {
+        var result = Data()
+        guard let dateDirs = try? FileManager.default.contentsOfDirectory(
+            at: rootURL, includingPropertiesForKeys: nil
+        ) else { return result }
+        let skip: Set<String> = ["seal", "pending"]
+        let sorted = dateDirs
+            .filter { $0.hasDirectoryPath && !skip.contains($0.lastPathComponent) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        for dayURL in sorted {
+            let files = ((try? FileManager.default.contentsOfDirectory(
+                at: dayURL, includingPropertiesForKeys: nil
+            )) ?? []).filter { $0.pathExtension == "ndjson" }
+                       .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            for fileURL in files {
+                if let data = try? Data(contentsOf: fileURL) { result.append(data) }
+            }
+        }
+        return result
+    }
+
+    public func verifyAllIntegrity() -> (checked: Int, issues: [IntegrityIssue]) {
+        var all: [LogEntry] = []
+        guard let dateDirs = try? FileManager.default.contentsOfDirectory(
+            at: rootURL, includingPropertiesForKeys: nil
+        ) else { return (0, []) }
+        let skip: Set<String> = ["seal", "pending"]
+        for dayURL in dateDirs where dayURL.hasDirectoryPath && !skip.contains(dayURL.lastPathComponent) {
+            let files = ((try? FileManager.default.contentsOfDirectory(
+                at: dayURL, includingPropertiesForKeys: nil
+            )) ?? []).filter { $0.pathExtension == "ndjson" }
+            for fileURL in files {
+                guard let data = try? Data(contentsOf: fileURL) else { continue }
+                all.append(contentsOf: parseNDJSON(data))
+            }
+        }
+        all.sort { $0.sequenceNumber < $1.sequenceNumber }
+        var issues: [IntegrityIssue] = []
+        var expectedPrev = "GENESIS"
+        for (i, entry) in all.enumerated() {
+            if entry.previousEntryHash != expectedPrev {
+                issues.append(IntegrityIssue(
+                    sequenceNumber: entry.sequenceNumber, lineIndex: i,
+                    expected: expectedPrev, found: entry.previousEntryHash,
+                    description: "Chain break at seq \(entry.sequenceNumber)"
+                ))
+            }
+            expectedPrev = sha256(entry)
+        }
+        return (all.count, issues)
+    }
+
     // MARK: - Query API (used by EmbeddedServer HTTP routes)
 
     public func queryEntries(source: String?, search: String?, limit: Int, offset: Int) -> [LogEntry] {

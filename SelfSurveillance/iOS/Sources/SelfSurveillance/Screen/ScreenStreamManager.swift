@@ -1,12 +1,9 @@
 // MARK: - ScreenStreamManager.swift
-// Uses ReplayKit to capture the device screen and streams JPEG frames to the
-// backend server over a WebSocket connection.
-//
-// Each frame is sent as a binary WebSocket message containing a raw JPEG.
-// The server broadcasts those frames to connected Android viewers.
+// Uses ReplayKit to capture the device screen and delivers JPEG frames
+// directly to EmbeddedServer, which fans them out to connected browser clients.
 //
 // Usage:
-//   ScreenStreamManager.shared.start(serverURL: "ws://192.168.1.x:3000/screen/publish")
+//   ScreenStreamManager.shared.start()
 //   ScreenStreamManager.shared.stop()
 //
 // Entitlements / Privacy keys required in Info.plist:
@@ -14,6 +11,7 @@
 
 import ReplayKit
 import Foundation
+import UIKit
 
 public final class ScreenStreamManager: NSObject {
 
@@ -22,11 +20,7 @@ public final class ScreenStreamManager: NSObject {
     public var isStreaming: Bool { _isStreaming }
     private var _isStreaming = false
 
-    private var webSocket: URLSessionWebSocketTask?
-    private var session: URLSession?
-    private var serverURL: URL?
-
-    // Throttle: max frames per second to avoid flooding the network
+    // Throttle: max frames per second to avoid flooding connected clients
     public var maxFPS: Double = 10
     private var lastFrameTime = Date.distantPast
     private var minFrameInterval: TimeInterval { 1.0 / maxFPS }
@@ -41,12 +35,8 @@ public final class ScreenStreamManager: NSObject {
 
     // MARK: - Public API
 
-    public func start(serverURL: String) {
+    public func start() {
         guard !_isStreaming else { return }
-        guard let url = URL(string: serverURL) else { return }
-
-        self.serverURL = url
-        connectWebSocket(url: url)
 
         recorder.isMicrophoneEnabled = false
         recorder.startCapture(handler: { [weak self] sampleBuffer, bufferType, error in
@@ -67,10 +57,7 @@ public final class ScreenStreamManager: NSObject {
         guard _isStreaming else { return }
         recorder.stopCapture { [weak self] error in
             self?._isStreaming = false
-            self?.webSocket?.cancel(with: .goingAway, reason: nil)
-            self?.webSocket = nil
-            self?.logStreamEvent("captureStopped",
-                detail: error?.localizedDescription)
+            self?.logStreamEvent("captureStopped", detail: error?.localizedDescription)
         }
     }
 
@@ -86,7 +73,7 @@ public final class ScreenStreamManager: NSObject {
         queue.async { [weak self] in
             guard let self = self else { return }
             guard let jpegData = self.compressFrame(pixelBuffer) else { return }
-            self.sendFrame(jpegData)
+            EmbeddedServer.shared.broadcastScreenFrame(jpegData)
         }
     }
 
@@ -99,43 +86,7 @@ public final class ScreenStreamManager: NSObject {
 
         guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
 
-        let uiImage = UIImage(cgImage: cgImage)
-        return uiImage.jpegData(compressionQuality: jpegQuality)
-    }
-
-    // MARK: - WebSocket
-
-    private func connectWebSocket(url: URL) {
-        let config  = URLSessionConfiguration.default
-        session     = URLSession(configuration: config)
-        webSocket   = session?.webSocketTask(with: url)
-        webSocket?.resume()
-        receiveLoop()
-    }
-
-    private func receiveLoop() {
-        webSocket?.receive { [weak self] result in
-            switch result {
-            case .failure(let error):
-                print("[ScreenStreamManager] WebSocket error: \(error)")
-                // Attempt reconnect after 3 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    guard let self = self, self._isStreaming, let url = self.serverURL else { return }
-                    self.connectWebSocket(url: url)
-                }
-            case .success:
-                self?.receiveLoop()
-            }
-        }
-    }
-
-    private func sendFrame(_ data: Data) {
-        guard webSocket != nil else { return }
-        webSocket?.send(.data(data)) { error in
-            if let error = error {
-                print("[ScreenStreamManager] Send error: \(error)")
-            }
-        }
+        return UIImage(cgImage: cgImage).jpegData(compressionQuality: jpegQuality)
     }
 
     // MARK: - Logging
@@ -154,5 +105,3 @@ public final class ScreenStreamManager: NSObject {
         )
     }
 }
-
-import UIKit  // for UIImage.jpegData

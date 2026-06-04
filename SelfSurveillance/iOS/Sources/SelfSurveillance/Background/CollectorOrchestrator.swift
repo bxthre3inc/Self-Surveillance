@@ -36,6 +36,11 @@ public final class CollectorOrchestrator {
             }
         }
 
+        // Start the in-app HTTP/WebSocket server so any browser on the same
+        // WiFi can reach the live dashboard at http://<iphone-ip>:8080
+        EmbeddedServer.shared.start()
+        ScreenStreamManager.shared.start()
+
         AppUsageCollector.shared.start()
         NotificationCollector.shared.start()
         ClipboardCollector.shared.start()
@@ -76,6 +81,7 @@ public final class CollectorOrchestrator {
 
     public func stopAll() {
         pulseTimer?.invalidate()
+        ScreenStreamManager.shared.stop()
         AppUsageCollector.shared.stop()
         ClipboardCollector.shared.stop()
         PhotoLibraryCollector.shared.stop()

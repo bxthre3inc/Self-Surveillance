@@ -78,6 +78,9 @@ public final class ImmutableLogStore {
         restoreChainState()
     }
 
+    // MARK: - Live-broadcast hook (set by EmbeddedServer)
+    public static var onNewEntry: ((LogEntry) -> Void)?
+
     // MARK: - Public API
 
     /// Append a single log entry.  This is the ONLY way to write data.
@@ -116,6 +119,7 @@ public final class ImmutableLogStore {
             lastEntryHash = sha256(entry)
             updateSeal(for: source)
         }
+        ImmutableLogStore.onNewEntry?(entry)
         return entry
     }
 
@@ -199,6 +203,99 @@ public final class ImmutableLogStore {
             expectedPrevHash = sha256(entry)
         }
         return issues
+    }
+
+    // MARK: - Query API (used by EmbeddedServer HTTP routes)
+
+    public func queryEntries(source: String?, search: String?, limit: Int, offset: Int) -> [LogEntry] {
+        var results: [LogEntry] = []
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        guard let dateDirs = try? FileManager.default.contentsOfDirectory(
+            at: rootURL, includingPropertiesForKeys: nil
+        ) else { return [] }
+
+        let sorted = dateDirs
+            .filter { $0.hasDirectoryPath }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+
+        outer: for dayURL in sorted {
+            let files: [URL]
+            if let src = source {
+                let candidate = dayURL.appendingPathComponent("\(src).ndjson")
+                files = FileManager.default.fileExists(atPath: candidate.path) ? [candidate] : []
+            } else {
+                files = (try? FileManager.default.contentsOfDirectory(
+                    at: dayURL, includingPropertiesForKeys: nil
+                ))?.filter { $0.pathExtension == "ndjson" } ?? []
+            }
+
+            for fileURL in files {
+                guard let data = try? Data(contentsOf: fileURL) else { continue }
+                let lines = (String(data: data, encoding: .utf8) ?? "")
+                    .components(separatedBy: "\n")
+                    .filter { !$0.isEmpty }
+                    .reversed()
+
+                for line in lines {
+                    guard let lineData = line.data(using: .utf8),
+                          let entry = try? JSONDecoder().decode(LogEntry.self, from: lineData)
+                    else { continue }
+
+                    if let needle = search?.lowercased() {
+                        let hay = (String(data: (try? JSONEncoder().encode(entry)) ?? Data(), encoding: .utf8) ?? "").lowercased()
+                        if !hay.contains(needle) { continue }
+                    }
+
+                    results.append(entry)
+                    if results.count >= offset + limit { break outer }
+                }
+            }
+        }
+
+        let slice = results.dropFirst(offset)
+        return Array(slice.prefix(limit))
+    }
+
+    public func querySummary(deviceID: String?) -> [String: Any] {
+        var bySource: [String: Int] = [:]
+        var total = 0
+
+        guard let dateDirs = try? FileManager.default.contentsOfDirectory(
+            at: rootURL, includingPropertiesForKeys: nil
+        ) else { return [:] }
+
+        for dayURL in dateDirs where dayURL.hasDirectoryPath {
+            let files = (try? FileManager.default.contentsOfDirectory(
+                at: dayURL, includingPropertiesForKeys: nil
+            ))?.filter { $0.pathExtension == "ndjson" } ?? []
+
+            for fileURL in files {
+                guard let data = try? Data(contentsOf: fileURL),
+                      let text = String(data: data, encoding: .utf8)
+                else { continue }
+
+                let lines = text.components(separatedBy: "\n").filter { !$0.isEmpty }
+                let sourceName = fileURL.deletingPathExtension().lastPathComponent
+                bySource[sourceName, default: 0] += lines.count
+                total += lines.count
+            }
+        }
+
+        let device = UIDevice.current
+        let deviceInfo: [String: Any] = [
+            "deviceID":   device.identifierForVendor?.uuidString ?? "unknown",
+            "deviceName": device.name,
+            "iOSVersion": device.systemVersion,
+            "entryCount": total
+        ]
+
+        return [
+            "totalEntries": total,
+            "bySource":     bySource,
+            "devices":      [deviceInfo]
+        ]
     }
 
     // MARK: - Private helpers
